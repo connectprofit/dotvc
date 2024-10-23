@@ -1,0 +1,41 @@
+use sp_core::Pair;
+use sp_keyring::AccountKeyring;
+use substrate_api_client::{
+    Api, XtStatus, rpc::WsRpcClient, AccountId,
+    compose_extrinsic_offline, UncheckedExtrinsicV4, utils::hexstr_to_u256
+};
+use sp_runtime::MultiAddress;
+
+fn main() {
+    // Connecting to the node via WebSocket
+    let client = WsRpcClient::new("wss://rpc.polkadot.io");
+    let api = Api::<sr25519::Pair, _>::new(client).unwrap();
+
+    // Load the signing key (this is a test key)
+    let signer = AccountKeyring::Alice.pair();
+    
+    // Retrieve the recipient's address
+    let to: AccountId = AccountKeyring::Bob.to_account_id();
+    
+    // Get the current account nonce for signing
+    let from = AccountKeyring::Alice.to_account_id();
+    let nonce = api.get_account_nonce(&from).unwrap();
+
+    // Create the transfer transaction
+    let amount = 10_000_000_000u128;  // 1 DOT (in Plancks)
+    let xt: UncheckedExtrinsicV4<_> = compose_extrinsic_offline!(
+        api,
+        "Balances",
+        "transfer",
+        MultiAddress::Id(to.clone()),
+        Compact(amount),
+        nonce
+    );
+
+    println!("Sending transaction: {:?}", xt);
+
+    // Send the transaction
+    let block_hash = api.send_extrinsic(xt.hex_encode(), XtStatus::InBlock).unwrap();
+
+    println!("Transaction included in block: {:?}", block_hash);
+}
